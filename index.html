@@ -270,7 +270,8 @@
     .btn-audio:active { background: var(--yellow-deep); }
 
     .nav-buttons { display: flex; gap: 10px; }
-    .btn-nav { flex: 1; background: var(--blue); color: #fff; }
+    .btn-nav { background: var(--blue); color: #fff; flex-shrink: 0; }
+    .nav-buttons .btn-nav { flex: 1; }
     .btn-nav:active { background: var(--blue-deep); }
 
     /* Vista Elenco Completo */
@@ -382,8 +383,8 @@
        Supabase (Project Settings → API).
        ========================================================= */
     const CFG = {
-      URL: 'https://TUO-PROGETTO.supabase.co',   // <-- URL progetto Supabase
-      KEY: 'TUA_CHIAVE_ANON_PUBLIC'               // <-- anon/publishable key
+      URL: 'https://uhvimtzuigtrudqzqeeh.supabase.co',   // <-- URL progetto Supabase
+      KEY: 'sb_publishable_VZ5MXqzlJgK5GVX2vTvPlw_2hC0zX5D'               // <-- anon/publishable key
     };
 
     /* Schema SQL da eseguire una volta sola nel SQL Editor di Supabase:
@@ -483,7 +484,10 @@
       const res = await fetch(`${CFG.URL}/rest/v1/${path}`, {
         method, headers, body: body ? JSON.stringify(body) : undefined
       });
-      if (!res.ok) throw new Error(`Supabase ${method} ${path} -> ${res.status}`);
+      if (!res.ok) {
+        const dettaglio = await res.text().catch(() => '');
+        throw new Error(`Supabase ${method} ${path} -> ${res.status} ${dettaglio}`);
+      }
       const text = await res.text();
       return text ? JSON.parse(text) : null;
     }
@@ -493,7 +497,10 @@
     }
 
     async function loadCarte() {
-      if (!configurato()) return;
+      if (!configurato()) {
+        flashMessage('Supabase non configurato: le carte non vengono salvate (vedi CFG in cima al file)', 4000);
+        return;
+      }
       try {
         const rows = await db('GET', 'pokedex_carte?select=pokemon_id,posseduta');
         S.carte = new Map(rows.map(r => [r.pokemon_id, r.posseduta]));
@@ -501,7 +508,8 @@
         updateCarteCounter();
         if (!viewElenco.classList.contains('hidden')) renderElenco(elencoInput.value);
       } catch (e) {
-        console.log('Impossibile caricare le carte da Supabase', e);
+        console.log('Impossibile caricare le carte da Supabase:', e.message);
+        flashMessage('Errore nel caricare le carte da Supabase — vedi console (F12)', 4000);
       }
     }
 
@@ -519,8 +527,12 @@
           body: { pokemon_id: S.currentId, posseduta: nuovoStato, aggiornato_il: new Date().toISOString() }
         });
       } catch (e) {
-        console.log('Errore salvataggio carta', e);
-        flashMessage('Non salvato online: controlla la connessione');
+        console.log('Errore salvataggio carta:', e.message);
+        // rollback dell'aggiornamento ottimista, dato che il salvataggio è fallito davvero
+        S.carte.set(S.currentId, !nuovoStato);
+        renderOwnedBtn();
+        updateCarteCounter();
+        flashMessage('Salvataggio fallito — vedi console (F12) per il dettaglio', 4000);
       }
     }
 
