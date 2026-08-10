@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pokédex</title>
-  
+
   <!-- Web App / PWA Setup per Schermo Intero su Smartphone -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -63,6 +63,7 @@
       border-radius: 50%;
       border: 4px solid #ffffff;
       box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      flex-shrink: 0;
     }
 
     .led-lights {
@@ -80,6 +81,21 @@
     .led-red { background-color: #ff0000; }
     .led-yellow { background-color: #ffcc00; }
     .led-green { background-color: #00cc00; }
+
+    .btn-elenco-toggle {
+      margin-left: auto;
+      background-color: #2b2b2b;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 1rem;
+      cursor: pointer;
+      box-shadow: 0 3px #000;
+    }
+    .btn-elenco-toggle:active { box-shadow: 0 1px #000; transform: translateY(2px); }
+
+    .hidden { display: none !important; }
 
     /* Schermo Verde Retrò */
     .screen-container {
@@ -138,6 +154,13 @@
       background-color: #666;
     }
 
+    .owned-flag {
+      margin-top: 10px;
+      font-size: 0.85rem;
+      font-weight: bold;
+      color: #2e7d32;
+    }
+
     /* Punti di Controllo e Ricerca */
     .controls {
       margin-top: 15px;
@@ -149,6 +172,7 @@
     .search-box {
       display: flex;
       gap: 5px;
+      position: relative;
     }
 
     input[type="text"] {
@@ -157,8 +181,37 @@
       border-radius: 8px;
       border: 2px solid #500000;
       outline: none;
-      font-size: 1rem;
+      font-size: 16px; /* sotto i 16px Safari iOS zooma al focus */
+      width: 100%;
     }
+
+    .suggestions {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 46px;
+      background: #fff;
+      border: 2px solid #500000;
+      border-radius: 8px;
+      max-height: 220px;
+      overflow-y: auto;
+      z-index: 20;
+      box-shadow: 0 6px 14px rgba(0,0,0,0.3);
+    }
+
+    .suggestion-item {
+      padding: 8px 10px;
+      text-transform: capitalize;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.95rem;
+    }
+    .suggestion-item:not(:last-child) { border-bottom: 1px solid #eee; }
+    .suggestion-item:active,
+    .suggestion-item.active { background: #ffe6e6; }
+    .suggestion-num { color: #888; font-size: 0.85rem; }
 
     button {
       padding: 10px 15px;
@@ -206,16 +259,112 @@
       transform: translateY(3px);
     }
 
+    .btn-owned {
+      width: 100%;
+      background-color: #555;
+      box-shadow: 0 4px #222;
+    }
+    .btn-owned.posseduta {
+      background-color: #2e7d32;
+      box-shadow: 0 4px #1b5e20;
+    }
+    .btn-owned:active { box-shadow: 0 1px #000; transform: translateY(3px); }
+
     .loading, .error {
       font-size: 1rem;
       color: #666;
     }
+
+    /* Vista Elenco Completo */
+    #view-elenco {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .elenco-search input {
+      width: 100%;
+    }
+
+    .elenco-list {
+      background: #dedede;
+      border-radius: 10px;
+      border: 3px solid #666;
+      max-height: 360px;
+      overflow-y: auto;
+    }
+
+    .elenco-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+      border-bottom: 1px solid #c8c8c8;
+    }
+    .elenco-item:last-child { border-bottom: none; }
+    .elenco-item:active { background: #cfcfcf; }
+
+    .elenco-num {
+      font-size: 0.85rem;
+      color: #555;
+      width: 42px;
+      flex-shrink: 0;
+    }
+
+    .elenco-nome {
+      flex: 1;
+      text-transform: capitalize;
+      font-weight: 600;
+      color: #222;
+    }
+
+    .elenco-badge {
+      width: 22px;
+      text-align: center;
+    }
+
+    .elenco-empty, .elenco-hint {
+      padding: 16px;
+      text-align: center;
+      color: #666;
+      font-size: 0.9rem;
+    }
+
+    .elenco-count {
+      font-size: 0.8rem;
+      color: #ffe1e1;
+      text-align: center;
+    }
+
+    /* Toast di avviso */
+    #toast {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #232323;
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      max-width: 90vw;
+      text-align: center;
+      z-index: 999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+    }
+    #toast.show { opacity: 1; }
   </style>
 </head>
 <body>
 
+  <div id="toast"></div>
+
   <div class="pokedex">
-    <!-- Header estitico Pokédex -->
+    <!-- Header estetico Pokédex -->
     <div class="pokedex-header">
       <div class="camera-lens"></div>
       <div class="led-lights">
@@ -223,34 +372,86 @@
         <div class="led led-yellow"></div>
         <div class="led led-green"></div>
       </div>
+      <button class="btn-elenco-toggle" id="elenco-toggle-btn" title="Elenco completo">📋 Elenco</button>
     </div>
 
-    <!-- Schermo Principale -->
-    <div class="screen-container">
-      <div class="screen" id="screen">
-        <div class="loading">Inizializzazione Pokédex...</div>
+    <!-- VISTA DETTAGLIO -->
+    <div id="view-dettaglio">
+      <div class="screen-container">
+        <div class="screen" id="screen">
+          <div class="loading">Inizializzazione Pokédex...</div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="search-box">
+          <input type="text" id="pokemon-input" placeholder="Nome o Numero (es. 25)..." autocomplete="off">
+          <button id="search-btn">Cerca</button>
+          <div class="suggestions hidden" id="suggestions"></div>
+        </div>
+
+        <button class="btn-owned" id="owned-btn">🃏 Segna carta posseduta</button>
+
+        <button class="btn-audio" id="audio-btn">🔊 Ascolta Verso</button>
+
+        <div class="nav-buttons">
+          <button class="btn-nav" id="prev-btn">◀ Precedente</button>
+          <button class="btn-nav" id="next-btn">Successivo ▶</button>
+        </div>
       </div>
     </div>
 
-    <!-- Controlli -->
-    <div class="controls">
-      <div class="search-box">
-        <input type="text" id="pokemon-input" placeholder="Nome o Numero (es. 25)...">
-        <button id="search-btn">Cerca</button>
+    <!-- VISTA ELENCO COMPLETO -->
+    <div id="view-elenco" class="hidden">
+      <div class="elenco-search">
+        <input type="text" id="elenco-input" placeholder="Cerca per nome o numero..." autocomplete="off">
       </div>
-
-      <button class="btn-audio" id="audio-btn">🔊 Ascolta Verso</button>
-
-      <div class="nav-buttons">
-        <button class="btn-nav" id="prev-btn">◀ Precedente</button>
-        <button class="btn-nav" id="next-btn">Successivo ▶</button>
-      </div>
+      <div class="elenco-count" id="elenco-count"></div>
+      <div class="elenco-list" id="elenco-list"></div>
+      <button class="btn-nav" id="elenco-back-btn">◀ Torna al Pokédex</button>
     </div>
   </div>
 
   <script>
-    let currentPokemonId = 1;
-    let currentAudioUrl = '';
+    /* =========================================================
+       CONFIGURAZIONE — sostituisci con i valori del TUO progetto
+       Supabase (Project Settings → API).
+       ========================================================= */
+    const CFG = {
+      URL: 'https://uhvimtzuigtrudqzqeeh.supabase.co',       // <-- URL progetto Supabase
+      KEY: 'sb_publishable_VZ5MXqzlJgK5GVX2vTvPlw_2hC0zX5D'  // <-- anon/public key
+    };
+
+    /* Schema SQL da eseguire una volta sola nel SQL Editor di Supabase:
+
+       create table pokedex_carte (
+         pokemon_id   integer primary key,
+         posseduta    boolean not null default false,
+         aggiornato_il timestamptz not null default now()
+       );
+
+       alter table pokedex_carte enable row level security;
+
+       create policy "lettura_pubblica" on pokedex_carte
+         for select to anon using (true);
+       create policy "scrittura_pubblica" on pokedex_carte
+         for insert to anon with check (true);
+       create policy "aggiornamento_pubblico" on pokedex_carte
+         for update to anon using (true) with check (true);
+
+       Nota: le policy sono aperte perché l'app non ha login (uso
+       familiare, dato non sensibile: solo "ho/non ho la carta").
+       Se preferisci un minimo di protezione, si può aggiungere una
+       password condivisa semplice — dimmelo e la implemento.
+    */
+
+    const S = {
+      tuttiPokemon: [],           // [{id, name}] elenco completo, cache locale
+      carte: new Map(),           // pokemon_id -> posseduta (bool)
+      currentId: 1,
+      currentAudioUrl: '',
+      requestId: 0                // token per scartare risposte fuori ordine
+    };
 
     const screen = document.getElementById('screen');
     const input = document.getElementById('pokemon-input');
@@ -258,87 +459,318 @@
     const prevBtn = document.getElementById('prev-btn');
     const nextBtn = document.getElementById('next-btn');
     const audioBtn = document.getElementById('audio-btn');
+    const ownedBtn = document.getElementById('owned-btn');
+    const suggestionsBox = document.getElementById('suggestions');
+    const toast = document.getElementById('toast');
 
-    // Mappa colori per i Tipi
+    const elencoToggleBtn = document.getElementById('elenco-toggle-btn');
+    const elencoBackBtn = document.getElementById('elenco-back-btn');
+    const viewDettaglio = document.getElementById('view-dettaglio');
+    const viewElenco = document.getElementById('view-elenco');
+    const elencoInput = document.getElementById('elenco-input');
+    const elencoList = document.getElementById('elenco-list');
+    const elencoCount = document.getElementById('elenco-count');
+
+    // Mappa colori ufficiali per tutti i 18 tipi
     const typeColors = {
-      fire: '#EE8130', grass: '#7AC74C', water: '#6390F0',
-      bug: '#A6B91A', normal: '#A8A878', poison: '#A040A0',
-      electric: '#F7D02C', ground: '#E2BF65', fairy: '#D685AD',
-      fighting: '#C22E28', psychic: '#F95587', rock: '#B6A136',
-      ghost: '#70559B', ice: '#96D9D6', dragon: '#6F35FC'
+      normal: '#A8A878', fire: '#EE8130', water: '#6390F0', electric: '#F7D02C',
+      grass: '#7AC74C', ice: '#96D9D6', fighting: '#C22E28', poison: '#A33EA1',
+      ground: '#E2BF65', flying: '#A98FF3', psychic: '#F95587', bug: '#A6B91A',
+      rock: '#B6A136', ghost: '#735797', dragon: '#6F35FC', dark: '#705746',
+      steel: '#B7B7CE', fairy: '#D685AD'
     };
 
-    // Funzione principale per caricare i dati da PokéAPI
+    /* ---------------- Utilità ---------------- */
+
+    function flashMessage(msg, durata = 2200) {
+      toast.textContent = msg;
+      toast.classList.add('show');
+      clearTimeout(flashMessage._t);
+      flashMessage._t = setTimeout(() => toast.classList.remove('show'), durata);
+    }
+
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    /* ---------------- Supabase REST minimale ---------------- */
+
+    async function db(method, path, { body } = {}) {
+      const headers = {
+        'apikey': CFG.KEY,
+        'Authorization': `Bearer ${CFG.KEY}`,
+        'Content-Type': 'application/json'
+      };
+      if (method !== 'GET') headers['Prefer'] = 'return=representation,resolution=merge-duplicates';
+      const res = await fetch(`${CFG.URL}/rest/v1/${path}`, {
+        method, headers, body: body ? JSON.stringify(body) : undefined
+      });
+      if (!res.ok) throw new Error(`Supabase ${method} ${path} -> ${res.status}`);
+      const text = await res.text();
+      return text ? JSON.parse(text) : null;
+    }
+
+    function configurato() {
+      return !CFG.URL.includes('TUO-PROGETTO') && !CFG.KEY.includes('TUA_CHIAVE');
+    }
+
+    async function loadCarte() {
+      if (!configurato()) return;
+      try {
+        const rows = await db('GET', 'pokedex_carte?select=pokemon_id,posseduta');
+        S.carte = new Map(rows.map(r => [r.pokemon_id, r.posseduta]));
+        renderOwnedBtn();
+        if (!viewElenco.classList.contains('hidden')) renderElenco(elencoInput.value);
+      } catch (e) {
+        console.log('Impossibile caricare le carte da Supabase', e);
+      }
+    }
+
+    async function toggleOwned() {
+      if (!configurato()) {
+        flashMessage('Configura CFG.URL e CFG.KEY per salvare le carte online');
+        return;
+      }
+      const nuovoStato = !(S.carte.get(S.currentId) === true);
+      S.carte.set(S.currentId, nuovoStato); // aggiornamento ottimista
+      renderOwnedBtn();
+      try {
+        await db('POST', 'pokedex_carte?on_conflict=pokemon_id', {
+          body: { pokemon_id: S.currentId, posseduta: nuovoStato, aggiornato_il: new Date().toISOString() }
+        });
+      } catch (e) {
+        console.log('Errore salvataggio carta', e);
+        flashMessage('Non salvato online: controlla la connessione');
+      }
+    }
+
+    function renderOwnedBtn() {
+      const posseduta = S.carte.get(S.currentId) === true;
+      ownedBtn.textContent = posseduta ? '✅ Carta posseduta' : '🃏 Segna carta posseduta';
+      ownedBtn.classList.toggle('posseduta', posseduta);
+    }
+
+    /* ---------------- Elenco completo (PokéAPI, cache locale) ---------------- */
+
+    async function loadListaCompleta() {
+      const cacheKey = 'pokedex_lista_v1';
+      try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) { S.tuttiPokemon = JSON.parse(cached); return; }
+      } catch (e) { /* localStorage non disponibile, ignora */ }
+
+      try {
+        const res = await fetch('https://pokeapi.co/api/v2/pokemon?limit=2000');
+        const data = await res.json();
+        S.tuttiPokemon = data.results
+          .map(p => {
+            const parts = p.url.split('/').filter(Boolean);
+            const id = parseInt(parts[parts.length - 1], 10);
+            return { id, name: p.name };
+          })
+          .filter(p => !isNaN(p.id))
+          .sort((a, b) => a.id - b.id);
+        try { localStorage.setItem(cacheKey, JSON.stringify(S.tuttiPokemon)); } catch (e) {}
+      } catch (e) {
+        console.log('Impossibile caricare elenco completo', e);
+      }
+    }
+
+    function cercaSuggerimenti(query) {
+      const q = query.trim().toLowerCase();
+      if (!q) return [];
+      return S.tuttiPokemon
+        .filter(p => p.name.includes(q) || String(p.id) === q)
+        .slice(0, 8);
+    }
+
+    function renderSuggerimenti(lista) {
+      if (!lista.length) { suggestionsBox.classList.add('hidden'); suggestionsBox.innerHTML = ''; return; }
+      suggestionsBox.innerHTML = lista.map(p => `
+        <div class="suggestion-item" data-id="${p.id}">
+          <span>${esc(p.name)}</span>
+          <span class="suggestion-num">#${String(p.id).padStart(3, '0')}</span>
+        </div>
+      `).join('');
+      suggestionsBox.classList.remove('hidden');
+    }
+
+    /* ---------------- Vista Dettaglio ---------------- */
+
     async function loadPokemon(query) {
+      const reqId = ++S.requestId;
       screen.innerHTML = `<div class="loading">Ricerca in corso...</div>`;
       try {
         const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${String(query).toLowerCase()}`);
-        if (!response.ok) throw new Error("Pokémon non trovato");
-
+        if (!response.ok) throw new Error('Pokémon non trovato');
         const data = await response.json();
-        currentPokemonId = data.id;
 
-        // Imposta l'URL dell'audio (verso ufficiale)
-        currentAudioUrl = data.cries.latest || data.cries.legacy || '';
+        // Scarta la risposta se nel frattempo è partita una ricerca più recente
+        if (reqId !== S.requestId) return;
 
-        // Costruisci le etichette per i tipi
+        S.currentId = data.id;
+        S.currentAudioUrl = (data.cries && (data.cries.latest || data.cries.legacy)) || '';
+
         const typesHtml = data.types.map(t => {
           const color = typeColors[t.type.name] || '#666';
           return `<span class="type-badge" style="background-color: ${color}">${t.type.name}</span>`;
         }).join('');
 
-        // Immagine sprite ad alta definizione
-        const sprite = data.sprites.other['official-artwork'].front_default || data.sprites.front_default;
+        const sprite = (data.sprites.other['official-artwork'] &&
+          data.sprites.other['official-artwork'].front_default) || data.sprites.front_default;
 
-        // Renderizza lo schermo
+        const posseduta = S.carte.get(S.currentId) === true;
+
         screen.innerHTML = `
           <div class="pokemon-id">N° ${String(data.id).padStart(3, '0')}</div>
-          <img class="pokemon-img" src="${sprite}" alt="${data.name}">
-          <div class="pokemon-name">${data.name}</div>
+          <img class="pokemon-img" src="${sprite}" alt="${esc(data.name)}">
+          <div class="pokemon-name">${esc(data.name)}</div>
           <div class="types-container">${typesHtml}</div>
+          ${posseduta ? '<div class="owned-flag">✅ Carta posseduta</div>' : ''}
         `;
+
+        renderOwnedBtn();
       } catch (err) {
+        if (reqId !== S.requestId) return;
         screen.innerHTML = `<div class="error">❌ Nessun Pokémon trovato</div>`;
       }
     }
 
-    // Riproduzione Audio
     function playCry() {
-      if (currentAudioUrl) {
-        const audio = new Audio(currentAudioUrl);
-        audio.play().catch(e => console.log("Riproduzione interrotta dall'utente"));
+      if (!S.currentAudioUrl) {
+        flashMessage('Verso non disponibile per questo Pokémon');
+        return;
       }
+      const audio = new Audio(S.currentAudioUrl);
+      audio.play().catch(e => {
+        console.log("Riproduzione audio non riuscita", e);
+        flashMessage('Audio non riprodotto su questo dispositivo');
+      });
     }
 
-    // Event Listener per Pulsanti e Input
+    /* ---------------- Vista Elenco ---------------- */
+
+    function apriElenco() {
+      viewDettaglio.classList.add('hidden');
+      viewElenco.classList.remove('hidden');
+      elencoInput.value = '';
+      renderElenco('');
+      elencoInput.focus();
+    }
+
+    function chiudiElenco() {
+      viewElenco.classList.add('hidden');
+      viewDettaglio.classList.remove('hidden');
+    }
+
+    function renderElenco(filtro) {
+      const q = filtro.trim().toLowerCase();
+      let items = S.tuttiPokemon;
+      if (q) {
+        items = items.filter(p =>
+          p.name.includes(q) ||
+          String(p.id) === q ||
+          String(p.id).padStart(3, '0').includes(q)
+        );
+      }
+
+      if (!S.tuttiPokemon.length) {
+        elencoList.innerHTML = `<div class="elenco-hint">Caricamento elenco in corso...</div>`;
+        elencoCount.textContent = '';
+        return;
+      }
+
+      const LIMITE = 60;
+      const mostrati = items.slice(0, LIMITE);
+
+      elencoList.innerHTML = mostrati.length
+        ? mostrati.map(p => {
+            const posseduta = S.carte.get(p.id) === true;
+            return `
+              <div class="elenco-item" data-id="${p.id}">
+                <span class="elenco-num">#${String(p.id).padStart(3, '0')}</span>
+                <span class="elenco-nome">${esc(p.name)}</span>
+                <span class="elenco-badge">${posseduta ? '✅' : ''}</span>
+              </div>`;
+          }).join('')
+        : `<div class="elenco-empty">Nessun Pokémon trovato</div>`;
+
+      elencoCount.textContent = q
+        ? `${items.length} risultati${items.length > LIMITE ? ` (primi ${LIMITE})` : ''}`
+        : `${S.tuttiPokemon.length} Pokémon in totale — digita per cercare`;
+    }
+
+    /* ---------------- Event Listener ---------------- */
+
     searchBtn.addEventListener('click', () => {
       if (input.value.trim() !== '') {
         loadPokemon(input.value.trim());
         input.value = '';
+        renderSuggerimenti([]);
       }
+    });
+
+    input.addEventListener('input', () => {
+      renderSuggerimenti(cercaSuggerimenti(input.value));
     });
 
     input.addEventListener('keypress', (e) => {
       if (e.key === 'Enter' && input.value.trim() !== '') {
         loadPokemon(input.value.trim());
         input.value = '';
+        renderSuggerimenti([]);
       }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!suggestionsBox.contains(e.target) && e.target !== input) {
+        suggestionsBox.classList.add('hidden');
+      }
+    });
+
+    suggestionsBox.addEventListener('click', (e) => {
+      const item = e.target.closest('.suggestion-item');
+      if (!item) return;
+      loadPokemon(item.dataset.id);
+      input.value = '';
+      renderSuggerimenti([]);
     });
 
     prevBtn.addEventListener('click', () => {
-      if (currentPokemonId > 1) {
-        loadPokemon(currentPokemonId - 1);
-      }
+      if (S.currentId > 1) loadPokemon(S.currentId - 1);
     });
 
     nextBtn.addEventListener('click', () => {
-      loadPokemon(currentPokemonId + 1);
+      loadPokemon(S.currentId + 1);
     });
 
     audioBtn.addEventListener('click', playCry);
+    ownedBtn.addEventListener('click', toggleOwned);
 
-    // Caricamento Iniziale (Bulbasaur #1)
-    loadPokemon(1);
+    elencoToggleBtn.addEventListener('click', apriElenco);
+    elencoBackBtn.addEventListener('click', chiudiElenco);
+
+    elencoInput.addEventListener('input', () => renderElenco(elencoInput.value));
+
+    elencoList.addEventListener('click', (e) => {
+      const item = e.target.closest('.elenco-item');
+      if (!item) return;
+      chiudiElenco();
+      loadPokemon(item.dataset.id);
+    });
+
+    /* ---------------- Avvio ---------------- */
+
+    (async function init() {
+      if (!configurato()) {
+        console.log('Ricorda di impostare CFG.URL e CFG.KEY per salvare le carte possedute su Supabase.');
+      }
+      loadListaCompleta();  // non bloccante
+      loadCarte();          // non bloccante
+      loadPokemon(1);       // Bulbasaur di default
+    })();
   </script>
 </body>
 </html>
