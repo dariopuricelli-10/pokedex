@@ -176,6 +176,31 @@
       letter-spacing: 0.03em;
     }
 
+    .id-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .icon-btn {
+      width: 34px;
+      height: 34px;
+      flex-shrink: 0;
+      border-radius: 50%;
+      background: #fff;
+      border: 2px solid var(--border);
+      color: var(--blue);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+    }
+    .icon-btn:active { opacity: 0.8; }
+    .icon-btn.attivo { background: var(--yellow); border-color: var(--yellow); color: var(--navy); }
+    .icon-btn svg { width: 17px; height: 17px; }
+
     .types-container {
       display: flex;
       gap: 8px;
@@ -205,13 +230,6 @@
       color: var(--navy);
       font-style: italic;
       line-height: 1.4;
-    }
-
-    .hint-stats {
-      margin-top: 2px;
-      font-size: 0.72rem;
-      color: var(--blue);
-      opacity: 0.85;
     }
 
     .sezione-titolo {
@@ -249,18 +267,6 @@
     .evo-pill { padding: 6px 12px; border-radius: 14px; background: #fff; border: 2px solid var(--border); font-size: 0.8rem; font-weight: 700; color: var(--navy); text-transform: capitalize; cursor: pointer; }
     .evo-pill.corrente { background: var(--blue); color: #fff; border-color: var(--blue); }
     .evo-arrow { color: var(--blue); font-weight: 700; }
-
-    .btn-shiny {
-      margin-top: 8px;
-      background: none;
-      border: none;
-      color: var(--blue);
-      font-weight: 700;
-      font-size: 0.78rem;
-      text-decoration: underline;
-      padding: 4px 8px;
-      cursor: pointer;
-    }
 
     /* Modale statistiche e debolezze, aperta toccando l'immagine */
     .modal-overlay {
@@ -384,9 +390,6 @@
     .btn-owned.posseduta { background: var(--orange); color: #fff; border-color: var(--orange); }
     .btn-owned:active { opacity: 0.85; }
 
-    .btn-audio { width: 100%; background: var(--yellow); color: var(--navy); }
-    .btn-audio:active { background: var(--yellow-deep); }
-
     .nav-buttons { display: flex; gap: 10px; }
     .btn-nav { background: var(--blue); color: #fff; flex-shrink: 0; }
     .nav-buttons .btn-nav { flex: 1; }
@@ -480,8 +483,6 @@
         </div>
 
         <button class="btn-owned" id="owned-btn">Segna carta posseduta</button>
-
-        <button class="btn-audio" id="audio-btn">Ascolta verso</button>
 
         <div class="nav-buttons">
           <button class="btn-nav" id="prev-btn">◀ Precedente</button>
@@ -578,7 +579,6 @@
     const searchBtn = document.getElementById('search-btn');
     const prevBtn = document.getElementById('prev-btn');
     const nextBtn = document.getElementById('next-btn');
-    const audioBtn = document.getElementById('audio-btn');
     const ownedBtn = document.getElementById('owned-btn');
     const suggestionsBox = document.getElementById('suggestions');
     const toast = document.getElementById('toast');
@@ -905,6 +905,9 @@
       return (art && art.front_default) || data.sprites.front_default;
     }
 
+    const ICON_SPARKLE = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z"/></svg>';
+    const ICON_SPEAKER = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M16.5 12c0-1.6-.9-3-2.2-3.7v7.4c1.3-.7 2.2-2.1 2.2-3.7z"/><path d="M15 5.3v2.1c2.3 1 4 3.4 4 6.1s-1.7 5.1-4 6.1v2.1c3.4-1.1 5.9-4.3 5.9-8.2s-2.5-7.1-5.9-8.2z"/></svg>';
+
     const STAT_LABELS = {
       hp: 'PS', attack: 'Attacco', defense: 'Difesa',
       'special-attack': 'Att. Speciale', 'special-defense': 'Dif. Speciale', speed: 'Velocità'
@@ -967,12 +970,14 @@
       }
 
       screen.innerHTML = `
-        <div class="pokemon-id">#${String(data.id).padStart(3, '0')}</div>
+        <div class="id-row">
+          <button class="icon-btn btn-shiny-icon${S.shiny ? ' attivo' : ''}" title="Colorazione shiny" aria-label="Mostra colorazione shiny">${ICON_SPARKLE}</button>
+          <div class="pokemon-id">#${String(data.id).padStart(3, '0')}</div>
+          <button class="icon-btn btn-audio-icon" title="Ascolta verso" aria-label="Ascolta il verso">${ICON_SPEAKER}</button>
+        </div>
         <img class="pokemon-img" src="${spriteUrl(data)}" alt="${esc(data.name)}">
         <div class="pokemon-name">${esc(data.name)}</div>
         <div class="types-container">${typesHtml}</div>
-        <button class="btn-shiny">${S.shiny ? 'Mostra colorazione normale' : 'Mostra colorazione shiny'}</button>
-        <div class="hint-stats">Tocca l'immagine per statistiche e debolezze</div>
         ${descrizioneHtml}
       `;
 
@@ -1193,15 +1198,18 @@
       loadPokemon(S.currentId + 1);
     });
 
-    audioBtn.addEventListener('click', playCry);
     ownedBtn.addEventListener('click', toggleOwned);
 
-    // Il pulsante shiny e l'immagine vengono ricreati a ogni renderScreen(),
+    // Le icone shiny/verso e l'immagine vengono ricreate a ogni renderScreen(),
     // quindi si intercettano con un solo listener delegato sul contenitore fisso
     screen.addEventListener('click', (e) => {
-      if (e.target.closest('.btn-shiny')) {
+      if (e.target.closest('.btn-shiny-icon')) {
         S.shiny = !S.shiny;
         renderScreen();
+        return;
+      }
+      if (e.target.closest('.btn-audio-icon')) {
+        playCry();
         return;
       }
       if (e.target.closest('.pokemon-img')) {
