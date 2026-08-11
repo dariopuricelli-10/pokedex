@@ -298,16 +298,37 @@
     }
     .modal-close { width: 100%; margin-top: 16px; background: var(--blue); color: #fff; }
 
+    .carte-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .carte-header .sezione-titolo { margin-top: 0; }
+
+    .carte-lang-select {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--navy);
+      background: #fff;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      padding: 4px 6px;
+      max-width: 130px;
+    }
+
     .carte-grid {
       display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      justify-content: center;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
     }
     .carta-thumb {
-      width: 72px;
+      width: 100%;
+      max-width: 220px;
       height: auto;
-      border-radius: 6px;
+      border-radius: 10px;
       border: 1px solid var(--border);
     }
     .carte-vuoto { font-size: 0.78rem; color: var(--blue); padding: 8px 0; text-align: center; width: 100%; }
@@ -586,6 +607,7 @@
       shiny: false,
       guess: { data: null, revealed: false },  // stato della pagina "Chi è questo Pokémon?"
       modalRequestId: 0,          // token per scartare risposte carte TCG fuori ordine
+      carteLang: 'it',            // lingua/nazione delle carte mostrate nella modale
       currentAudioUrl: '',
       requestId: 0                // token per scartare risposte fuori ordine
     };
@@ -921,6 +943,15 @@
       return (art && art.front_default) || data.sprites.front_default;
     }
 
+    // Lingue/nazioni supportate da TCGdex per le immagini delle carte
+    const LINGUE_CARTE = [
+      ['it', 'Italiano'], ['en', 'Inglese'], ['fr', 'Francese'], ['de', 'Tedesco'],
+      ['es', 'Spagnolo'], ['pt-pt', 'Portoghese'], ['pt-br', 'Portoghese (Brasile)'],
+      ['nl', 'Olandese'], ['pl', 'Polacco'], ['ru', 'Russo'], ['ja', 'Giapponese'],
+      ['ko', 'Coreano'], ['zh-tw', 'Cinese (Taiwan)'], ['zh-cn', 'Cinese (Cina)'],
+      ['id', 'Indonesiano'], ['th', 'Thailandese']
+    ];
+
     const ICON_SPARKLE = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z"/></svg>';
     const ICON_SPEAKER = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M16.5 12c0-1.6-.9-3-2.2-3.7v7.4c1.3-.7 2.2-2.1 2.2-3.7z"/><path d="M15 5.3v2.1c2.3 1 4 3.4 4 6.1s-1.7 5.1-4 6.1v2.1c3.4-1.1 5.9-4.3 5.9-8.2s-2.5-7.1-5.9-8.2z"/></svg>';
 
@@ -959,13 +990,19 @@
       const data = S.currentData;
       if (!data) return;
       const token = ++S.modalRequestId;
+      const opzioniLingua = LINGUE_CARTE
+        .map(([cod, nome]) => `<option value="${cod}"${cod === S.carteLang ? ' selected' : ''}>${nome}</option>`)
+        .join('');
       modalTitle.textContent = data.name;
       modalBody.innerHTML = contenutoStatsDebolezze(data) + `
-        <div class="sezione-titolo">Carte esistenti</div>
+        <div class="carte-header">
+          <div class="sezione-titolo">Carte esistenti</div>
+          <select id="carte-lang-select" class="carte-lang-select">${opzioniLingua}</select>
+        </div>
         <div class="carte-grid" id="carte-grid"><div class="carte-vuoto">Caricamento carte...</div></div>
       `;
       statsModal.classList.remove('hidden');
-      caricaCarteEsistenti(data.id, token);
+      caricaCarteEsistenti(data.id, token, S.carteLang);
     }
 
     function chiudiStatsModal() {
@@ -973,22 +1010,29 @@
       S.modalRequestId++; // invalida eventuali richieste di carte ancora in corso
     }
 
-    async function caricaCarteEsistenti(dexId, token) {
+    async function caricaCarteEsistenti(dexId, token, lang) {
       const grid = document.getElementById('carte-grid');
       try {
-        const res = await fetch(`https://api.tcgdex.net/v2/it/cards?dexId=eq:${dexId}&pagination:itemsPerPage=48`);
+        const res = await fetch(`https://api.tcgdex.net/v2/${lang}/cards?dexId=eq:${dexId}&pagination:itemsPerPage=48`);
         if (!res.ok) throw new Error('richiesta carte fallita');
         const carte = await res.json();
         if (token !== S.modalRequestId || !grid) return; // modale chiusa/cambiata nel frattempo
 
-        if (!carte.length) {
-          grid.innerHTML = '<div class="carte-vuoto">Nessuna carta trovata per questo Pokémon</div>';
+        // Non tutte le carte hanno una stampa nella lingua scelta: quelle senza
+        // campo "image" vengono escluse a monte, invece di mostrare un'icona rotta.
+        const conImmagine = carte.filter(c => c.image);
+
+        if (!conImmagine.length) {
+          grid.innerHTML = '<div class="carte-vuoto">Nessuna carta disponibile in questa lingua per questo Pokémon</div>';
           return;
         }
 
-        grid.innerHTML = carte.map(c => {
+        grid.innerHTML = conImmagine.map(c => {
           const setNome = (c.set && c.set.name) || '';
-          return `<img class="carta-thumb" src="${c.image}/low.webp" alt="${esc(c.name)}" title="${esc(c.name)}${setNome ? ' — ' + esc(setNome) : ''}" loading="lazy">`;
+          const titolo = `${c.name}${setNome ? ' — ' + setNome : ''}`;
+          // onerror di sicurezza: se anche con l'immagine dichiarata il file non
+          // si carica (asset mancante lato TCGdex), la rimuove invece di lasciare un'icona rotta.
+          return `<img class="carta-thumb" src="${c.image}/low.webp" alt="${esc(c.name)}" title="${esc(titolo)}" loading="lazy" onerror="this.remove()">`;
         }).join('');
       } catch (e) {
         if (token !== S.modalRequestId || !grid) return;
@@ -1270,6 +1314,15 @@
     modalCloseBtn.addEventListener('click', chiudiStatsModal);
     statsModal.addEventListener('click', (e) => {
       if (e.target === statsModal) chiudiStatsModal();
+    });
+
+    modalBody.addEventListener('change', (e) => {
+      if (e.target.id !== 'carte-lang-select' || !S.currentData) return;
+      S.carteLang = e.target.value;
+      const token = ++S.modalRequestId;
+      const grid = document.getElementById('carte-grid');
+      if (grid) grid.innerHTML = '<div class="carte-vuoto">Caricamento carte...</div>';
+      caricaCarteEsistenti(S.currentData.id, token, S.carteLang);
     });
 
     elencoToggleBtn.addEventListener('click', apriElenco);
