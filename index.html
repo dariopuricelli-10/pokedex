@@ -298,12 +298,27 @@
     }
     .modal-close { width: 100%; margin-top: 16px; background: var(--blue); color: #fff; }
 
+    .carte-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+    }
+    .carta-thumb {
+      width: 72px;
+      height: auto;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .carte-vuoto { font-size: 0.78rem; color: var(--blue); padding: 8px 0; text-align: center; width: 100%; }
+
     .pokemon-img { cursor: pointer; }
 
     /* Pagina "Indovina chi è" */
     .silhouette { filter: brightness(0); }
     .guess-hint { font-size: 1rem; color: var(--navy); font-weight: 700; margin: auto 0 4px; }
     .btn-rivela { margin-top: 12px; background: var(--orange); color: #fff; }
+    .hint-vai-pokedex { margin-top: 4px; font-size: 0.72rem; color: var(--blue); opacity: 0.85; }
     #view-indovina .controls button { width: 100%; }
 
     /* Striscia di completamento per generazione (vista elenco) */
@@ -570,6 +585,7 @@
       evoChain: null,             // [{id, name}] catena evolutiva appiattita
       shiny: false,
       guess: { data: null, revealed: false },  // stato della pagina "Chi è questo Pokémon?"
+      modalRequestId: 0,          // token per scartare risposte carte TCG fuori ordine
       currentAudioUrl: '',
       requestId: 0                // token per scartare risposte fuori ordine
     };
@@ -942,13 +958,42 @@
     function apriStatsModal() {
       const data = S.currentData;
       if (!data) return;
+      const token = ++S.modalRequestId;
       modalTitle.textContent = data.name;
-      modalBody.innerHTML = contenutoStatsDebolezze(data);
+      modalBody.innerHTML = contenutoStatsDebolezze(data) + `
+        <div class="sezione-titolo">Carte esistenti</div>
+        <div class="carte-grid" id="carte-grid"><div class="carte-vuoto">Caricamento carte...</div></div>
+      `;
       statsModal.classList.remove('hidden');
+      caricaCarteEsistenti(data.id, token);
     }
 
     function chiudiStatsModal() {
       statsModal.classList.add('hidden');
+      S.modalRequestId++; // invalida eventuali richieste di carte ancora in corso
+    }
+
+    async function caricaCarteEsistenti(dexId, token) {
+      const grid = document.getElementById('carte-grid');
+      try {
+        const res = await fetch(`https://api.tcgdex.net/v2/it/cards?dexId=eq:${dexId}&pagination:itemsPerPage=48`);
+        if (!res.ok) throw new Error('richiesta carte fallita');
+        const carte = await res.json();
+        if (token !== S.modalRequestId || !grid) return; // modale chiusa/cambiata nel frattempo
+
+        if (!carte.length) {
+          grid.innerHTML = '<div class="carte-vuoto">Nessuna carta trovata per questo Pokémon</div>';
+          return;
+        }
+
+        grid.innerHTML = carte.map(c => {
+          const setNome = (c.set && c.set.name) || '';
+          return `<img class="carta-thumb" src="${c.image}/low.webp" alt="${esc(c.name)}" title="${esc(c.name)}${setNome ? ' — ' + esc(setNome) : ''}" loading="lazy">`;
+        }).join('');
+      } catch (e) {
+        if (token !== S.modalRequestId || !grid) return;
+        grid.innerHTML = '<div class="carte-vuoto">Impossibile caricare le carte al momento</div>';
+      }
     }
 
     function renderScreen() {
@@ -1031,7 +1076,6 @@
       updateCarteCounter();
       elencoInput.value = '';
       renderElenco('');
-      elencoInput.focus();
     }
 
     function chiudiElenco() {
@@ -1088,8 +1132,9 @@
       }
       guessScreen.innerHTML = `
         <div class="pokemon-id">#${String(data.id).padStart(3, '0')}</div>
-        <img class="pokemon-img" src="${spriteSemplice(data)}" alt="${esc(data.name)}">
+        <img class="pokemon-img" src="${spriteSemplice(data)}" alt="${esc(data.name)}" data-id="${data.id}">
         <div class="pokemon-name">${esc(data.name)}</div>
+        <div class="hint-vai-pokedex">Tocca l'immagine per aprirlo nel Pokédex</div>
       `;
     }
 
@@ -1237,6 +1282,12 @@
       if (e.target.closest('.btn-rivela')) {
         S.guess.revealed = true;
         renderGuessScreen();
+        return;
+      }
+      const img = e.target.closest('.pokemon-img');
+      if (img && img.dataset.id) {
+        chiudiIndovina();
+        loadPokemon(img.dataset.id);
       }
     });
 
