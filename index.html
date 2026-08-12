@@ -472,7 +472,6 @@
     .search-box { display: flex; gap: 8px; position: relative; }
 
     input[type="text"], input[type="password"] {
-      flex: 1;
       padding: 11px 12px;
       border-radius: 10px;
       border: 2px solid var(--border);
@@ -483,6 +482,7 @@
       width: 100%;
     }
     input[type="text"]:focus, input[type="password"]:focus { border-color: var(--blue); }
+    .search-box input[type="text"] { flex: 1; }
 
     button {
       padding: 11px 16px;
