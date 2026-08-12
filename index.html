@@ -30,6 +30,8 @@
       --blue-deep: #1D6FB0;
       --navy: #001854;
       --red: #E40000;
+      --verde: #2E9E5B;
+      --verde-chiaro: #E6F6EC;
       --border: #D8E8F5;
       --app-height: 100dvh;
     }
@@ -118,7 +120,7 @@
     }
 
     /* Le tre viste riempiono lo spazio rimanente sotto l'header */
-    #view-dettaglio, #view-elenco, #view-indovina, #view-account, #view-admin, #view-stampa, #view-top-carte {
+    #view-dettaglio, #view-elenco, #view-indovina, #view-account, #view-admin, #view-stampa, #view-top-carte, #view-desiderate {
       flex: 1;
       display: flex;
       flex-direction: column;
@@ -508,7 +510,11 @@
       background: var(--panel);
       border: 2px solid var(--border);
       border-radius: 14px;
+      transition: background-color 0.15s, border-color 0.15s;
     }
+    .carte-grid.interattiva .carta-item { cursor: pointer; }
+    .carte-grid.interattiva .carta-item:active { opacity: 0.9; }
+    .carta-item.desiderata { background: var(--verde-chiaro); border-color: var(--verde); }
     .carta-thumb {
       width: 100%;
       max-width: 260px;
@@ -666,7 +672,7 @@
     .btn-nav { background: var(--blue); color: #fff; flex-shrink: 0; }
     .nav-buttons .btn-nav { flex: 1; }
     .btn-nav:active { background: var(--blue-deep); }
-    #elenco-back-btn, #acc-back-btn, #admin-back-btn, #stampa-back-btn, #top-carte-back-btn { margin-bottom: 14px; flex-shrink: 0; }
+    #elenco-back-btn, #acc-back-btn, #admin-back-btn, #stampa-back-btn, #top-carte-back-btn, #desiderate-back-btn { margin-bottom: 14px; flex-shrink: 0; }
 
     /* Vista Elenco Completo */
     .elenco-search input { width: 100%; }
@@ -870,6 +876,16 @@
       </div>
       <button class="btn-nav" id="top-carte-back-btn">◀ Torna al Pokédex</button>
     </div>
+
+    <!-- VISTA LISTA DESIDERI -->
+    <div id="view-desiderate" class="hidden">
+      <div class="sezione-titolo">Lista desideri</div>
+      <p class="stampa-info">Tocca una carta nella scheda di un Pokémon per aggiungerla o toglierla da qui.</p>
+      <div class="top-carte-scroll" id="desiderate-scroll">
+        <div class="carte-grid interattiva" id="desiderate-lista"></div>
+      </div>
+      <button class="btn-nav" id="desiderate-back-btn">◀ Torna al Pokédex</button>
+    </div>
   </div>
 
   <!-- Contenuto stampabile: invisibile a schermo, mostrato solo da @media print -->
@@ -881,6 +897,7 @@
       <button class="menu-item" data-target="account">Account</button>
       <button class="menu-item" data-target="stampa">Stampa segnaposto</button>
       <button class="menu-item" data-target="topcarte">Carte più costose</button>
+      <button class="menu-item" data-target="desiderate">Lista desideri</button>
       <button class="menu-item menu-item-admin hidden" id="menu-admin-item" data-target="admin">Amministrazione</button>
       <button class="menu-item menu-esci" id="menu-logout-btn">Esci</button>
       <button class="modal-close" id="menu-close-btn">Chiudi</button>
@@ -947,6 +964,8 @@
       modalRequestId: 0,          // token per scartare risposte carte TCG fuori ordine
       carteLang: 'it',            // lingua/nazione delle carte mostrate nella modale
       filtroGenerazione: null,    // { nome, da, a } se un'etichetta di generazione è selezionata
+      desiderate: new Set(),      // id carta TCGdex presenti nella lista desideri dell'utente
+      mappaCarteVisualizzate: {}, // id carta -> dati, per la modale attualmente aperta
       currentAudioUrl: '',
       requestId: 0                // token per scartare risposte fuori ordine
     };
@@ -986,6 +1005,10 @@
     const topCarteProgress = document.getElementById('top-carte-progress');
     const topCarteLista = document.getElementById('top-carte-lista');
     const topCarteBackBtn = document.getElementById('top-carte-back-btn');
+
+    const viewDesiderate = document.getElementById('view-desiderate');
+    const desiderateLista = document.getElementById('desiderate-lista');
+    const desiderateBackBtn = document.getElementById('desiderate-back-btn');
 
     const loginUsername = document.getElementById('login-username');
     const loginPassword = document.getElementById('login-password');
@@ -1396,7 +1419,7 @@
           <div class="sezione-titolo">Carte esistenti</div>
           <select id="carte-lang-select" class="carte-lang-select">${opzioniLingua}</select>
         </div>
-        <div class="carte-grid" id="carte-grid"><div class="carte-vuoto">Caricamento carte...</div></div>
+        <div class="carte-grid interattiva" id="carte-grid"><div class="carte-vuoto">Caricamento carte...</div></div>
       `;
       statsModal.classList.remove('hidden');
       caricaCarteEsistenti(data.id, token, S.carteLang);
@@ -1497,7 +1520,12 @@
           }
         });
 
-        grid.innerHTML = dettagli.map(c => bloccoCartaHTML(infoCartaDaOggetto(c, infoPerSet))).join('');
+        S.mappaCarteVisualizzate = {};
+        grid.innerHTML = dettagli.map(c => {
+          const d = infoCartaDaOggetto(c, infoPerSet);
+          S.mappaCarteVisualizzate[d.id] = d;
+          return bloccoCartaHTML(d);
+        }).join('');
       } catch (e) {
         if (token !== S.modalRequestId || !grid) return;
         grid.innerHTML = '<div class="carte-vuoto">Impossibile caricare le carte al momento</div>';
@@ -1519,6 +1547,7 @@
       if (numeroSerie) metaParti.push(numeroSerie);
 
       return {
+        id: c.id,
         nome: c.name,
         immagine: c.image,
         sottotitolo,
@@ -1529,12 +1558,13 @@
       };
     }
 
-    // Template condiviso del blocco carta: usato sia dalla modale del
-    // singolo Pokémon sia dalla pagina "Carte più costose".
+    // Template condiviso del blocco carta: usato dalla modale del singolo
+    // Pokémon, dalla pagina "Carte più costose" e dalla lista desideri.
     function bloccoCartaHTML(d, extra) {
       const badge = extra && extra.posizione ? `<div class="top-posizione">#${extra.posizione}</div>` : '';
+      const desiderata = d.id && S.desiderate.has(d.id);
       return `
-        <div class="carta-item">
+        <div class="carta-item${desiderata ? ' desiderata' : ''}" data-id="${esc(d.id || '')}">
           ${badge}
           <img class="carta-thumb" src="${d.immagine}/high.webp" alt="${esc(d.nome)}" loading="lazy" onerror="this.closest('.carta-item').remove()">
           <div class="carta-nome">${esc(d.nome)}</div>
@@ -1548,6 +1578,72 @@
     }
 
     /* ---------------- Account (cambio password) ---------------- */
+
+    /* ---------------- Lista desideri ---------------- */
+
+    async function loadDesiderate() {
+      if (!configurato() || !S.utente) return;
+      try {
+        const righe = await db('GET', `pokedex_desiderate?select=card_id&utente_id=eq.${S.utente.id}`);
+        S.desiderate = new Set(righe.map(r => r.card_id));
+      } catch (e) {
+        console.log('Impossibile caricare la lista desideri:', e.message);
+      }
+    }
+
+    function aggiornaStatoDesiderataDOM(idCarta, attivo) {
+      document.querySelectorAll(`.carta-item[data-id="${CSS.escape(idCarta)}"]`).forEach(el => {
+        el.classList.toggle('desiderata', attivo);
+      });
+    }
+
+    async function toggleDesiderata(idCarta, dati) {
+      if (!S.utente) return;
+      const attivoOra = !S.desiderate.has(idCarta);
+      if (attivoOra) S.desiderate.add(idCarta); else S.desiderate.delete(idCarta);
+      aggiornaStatoDesiderataDOM(idCarta, attivoOra);
+      try {
+        if (attivoOra) {
+          await db('POST', 'pokedex_desiderate?on_conflict=utente_id,card_id', {
+            body: { utente_id: S.utente.id, card_id: idCarta, dati, aggiunta_il: new Date().toISOString() }
+          });
+        } else {
+          await db('DELETE', `pokedex_desiderate?utente_id=eq.${S.utente.id}&card_id=eq.${encodeURIComponent(idCarta)}`);
+        }
+      } catch (e) {
+        // il salvataggio è fallito davvero: annulla l'aggiornamento ottimistico
+        if (attivoOra) S.desiderate.delete(idCarta); else S.desiderate.add(idCarta);
+        aggiornaStatoDesiderataDOM(idCarta, !attivoOra);
+        flashMessage('Errore nel salvare la lista desideri', 3500);
+      }
+    }
+
+    function apriDesiderate() {
+      nascondiTutteLeViste();
+      viewDesiderate.classList.remove('hidden');
+      evidenziaNav(null);
+      caricaListaDesiderate();
+    }
+
+    function chiudiDesiderate() {
+      nascondiTutteLeViste();
+      viewDettaglio.classList.remove('hidden');
+      evidenziaNav('dettaglio');
+    }
+
+    async function caricaListaDesiderate() {
+      desiderateLista.innerHTML = '<div class="carte-vuoto">Caricamento...</div>';
+      try {
+        const righe = await db('GET', `pokedex_desiderate?select=card_id,dati&utente_id=eq.${S.utente.id}&order=aggiunta_il.desc`);
+        if (!righe.length) {
+          desiderateLista.innerHTML = '<div class="carte-vuoto">Nessuna carta desiderata ancora. Toccane una nella scheda di un Pokémon per aggiungerla.</div>';
+          return;
+        }
+        desiderateLista.innerHTML = righe.map(r => bloccoCartaHTML({ ...r.dati, id: r.card_id })).join('');
+      } catch (e) {
+        desiderateLista.innerHTML = '<div class="carte-vuoto">Impossibile caricare la lista</div>';
+      }
+    }
 
     async function cambiaPassword() {
       const nuova = accPassword1.value;
@@ -1713,6 +1809,7 @@
       viewAdmin.classList.add('hidden');
       viewStampa.classList.add('hidden');
       viewTopCarte.classList.add('hidden');
+      viewDesiderate.classList.add('hidden');
     }
 
     function evidenziaNav(vista) {
@@ -2155,6 +2252,24 @@
       caricaCarteEsistenti(S.currentData.id, token, S.carteLang);
     });
 
+    modalBody.addEventListener('click', (e) => {
+      const item = e.target.closest('.carta-item');
+      if (!item || !item.dataset.id) return;
+      const dati = S.mappaCarteVisualizzate[item.dataset.id];
+      if (!dati) return;
+      toggleDesiderata(item.dataset.id, dati);
+    });
+
+    desiderateLista.addEventListener('click', (e) => {
+      const item = e.target.closest('.carta-item');
+      if (!item || !item.dataset.id) return;
+      toggleDesiderata(item.dataset.id, null);
+      item.remove();
+      if (!desiderateLista.querySelector('.carta-item')) {
+        desiderateLista.innerHTML = '<div class="carte-vuoto">Nessuna carta desiderata ancora. Toccane una nella scheda di un Pokémon per aggiungerla.</div>';
+      }
+    });
+
     elencoBackBtn.addEventListener('click', chiudiElenco);
     indovinaBackBtn.addEventListener('click', chiudiIndovina);
     guessRandomBtn.addEventListener('click', caricaPokemonACaso);
@@ -2182,6 +2297,7 @@
         else if (target === 'admin') apriAdmin();
         else if (target === 'stampa') apriStampa();
         else if (target === 'topcarte') apriTopCarte();
+        else if (target === 'desiderate') apriDesiderate();
       });
     });
     menuLogoutBtn.addEventListener('click', async () => {
@@ -2205,6 +2321,7 @@
     /* Carte più costose */
     topCarteRefreshBtn.addEventListener('click', aggiornaTopCarte);
     topCarteBackBtn.addEventListener('click', chiudiTopCarte);
+    desiderateBackBtn.addEventListener('click', chiudiDesiderate);
 
     /* Amministrazione */
     adminBackBtn.addEventListener('click', chiudiAdmin);
@@ -2324,6 +2441,7 @@
 
       loadListaCompleta();  // non bloccante
       loadCarte();          // non bloccante
+      loadDesiderate();     // non bloccante
       loadPokemon(1);       // Bulbasaur di default
       setupRealtime();      // sincronizzazione tra dispositivi (richiede Replication attiva su Supabase)
     }
