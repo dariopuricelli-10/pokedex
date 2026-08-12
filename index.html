@@ -480,8 +480,35 @@
       font-weight: 700;
       color: var(--navy);
       white-space: nowrap;
+      cursor: pointer;
     }
     .gen-chip b { color: var(--blue); }
+    .gen-chip.attivo { background: var(--blue); border-color: var(--blue); }
+    .gen-chip.attivo, .gen-chip.attivo b { color: #fff; }
+    .gen-chip:active { opacity: 0.85; }
+
+    .elenco-counter {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: var(--navy);
+      font-weight: 600;
+    }
+    .elenco-counter b { color: var(--blue); }
+    .elenco-reset-btn {
+      flex-shrink: 0;
+      background: #fff;
+      border: 2px solid var(--border);
+      color: var(--blue);
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 5px 9px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .elenco-reset-btn:active { background: var(--panel); }
 
     /* Controlli (barra inferiore) */
     .controls {
@@ -800,6 +827,7 @@
       guess: { data: null, revealed: false },  // stato della pagina "Chi è questo Pokémon?"
       modalRequestId: 0,          // token per scartare risposte carte TCG fuori ordine
       carteLang: 'it',            // lingua/nazione delle carte mostrate nella modale
+      filtroGenerazione: null,    // { nome, da, a } se un'etichetta di generazione è selezionata
       currentAudioUrl: '',
       requestId: 0                // token per scartare risposte fuori ordine
     };
@@ -1058,8 +1086,20 @@
     function updateCarteCounter() {
       const possedute = [...S.carte.values()].filter(v => v === true).length;
       const totale = S.tuttiPokemon.length;
-      if (elencoCounter) elencoCounter.textContent = totale ? `Le tue carte: ${possedute} / ${totale}` : '';
+      if (elencoCounter) {
+        elencoCounter.innerHTML = totale
+          ? `<span>Le tue carte: <b>${possedute} / ${totale}</b></span><button class="elenco-reset-btn hidden" id="elenco-reset-btn">Azzera filtri</button>`
+          : '';
+      }
       updateGenStrip();
+      aggiornaResetBtn();
+    }
+
+    function aggiornaResetBtn() {
+      const btn = document.getElementById('elenco-reset-btn');
+      if (!btn) return;
+      const filtriAttivi = !!S.filtroGenerazione || !!elencoInput.value.trim();
+      btn.classList.toggle('hidden', !filtriAttivi);
     }
 
     function updateGenStrip() {
@@ -1072,7 +1112,8 @@
           let posseduti = 0;
           for (let id = g.da; id <= fine; id++) if (S.carte.get(id) === true) posseduti++;
           const totaleGen = fine - g.da + 1;
-          return `<div class="gen-chip">${g.nome} <b>${posseduti}/${totaleGen}</b></div>`;
+          const attivo = S.filtroGenerazione && S.filtroGenerazione.nome === g.nome;
+          return `<div class="gen-chip${attivo ? ' attivo' : ''}" data-nome="${esc(g.nome)}" data-da="${g.da}" data-a="${fine}">${g.nome} <b>${posseduti}/${totaleGen}</b></div>`;
         }).join('');
     }
 
@@ -1540,8 +1581,9 @@
       nascondiTutteLeViste();
       viewElenco.classList.remove('hidden');
       evidenziaNav('elenco');
-      updateCarteCounter();
+      S.filtroGenerazione = null;
       elencoInput.value = '';
+      updateCarteCounter();
       renderElenco('');
     }
 
@@ -1652,6 +1694,9 @@
       }
 
       let items = S.tuttiPokemon;
+      if (S.filtroGenerazione) {
+        items = items.filter(p => p.id >= S.filtroGenerazione.da && p.id <= S.filtroGenerazione.a);
+      }
       if (q) {
         items = items.filter(p =>
           p.name.includes(q) ||
@@ -1660,7 +1705,8 @@
         );
       }
 
-      if (q) {
+      const filtriAttivi = !!q || !!S.filtroGenerazione;
+      if (filtriAttivi) {
         elencoCount.textContent = `${items.length} risultati`;
         elencoCount.classList.remove('hidden');
       } else {
@@ -1844,7 +1890,33 @@
       }
     });
 
-    elencoInput.addEventListener('input', () => renderElenco(elencoInput.value));
+    elencoInput.addEventListener('input', () => {
+      renderElenco(elencoInput.value);
+      aggiornaResetBtn();
+    });
+
+    genStrip.addEventListener('click', (e) => {
+      const chip = e.target.closest('.gen-chip');
+      if (!chip) return;
+      const nome = chip.dataset.nome;
+      if (S.filtroGenerazione && S.filtroGenerazione.nome === nome) {
+        S.filtroGenerazione = null; // era già selezionata: la disattiva
+      } else {
+        S.filtroGenerazione = { nome, da: parseInt(chip.dataset.da, 10), a: parseInt(chip.dataset.a, 10) };
+      }
+      updateGenStrip();
+      aggiornaResetBtn();
+      renderElenco(elencoInput.value);
+    });
+
+    elencoCounter.addEventListener('click', (e) => {
+      if (!e.target.closest('#elenco-reset-btn')) return;
+      S.filtroGenerazione = null;
+      elencoInput.value = '';
+      updateGenStrip();
+      aggiornaResetBtn();
+      renderElenco('');
+    });
 
     elencoList.addEventListener('click', (e) => {
       const item = e.target.closest('.elenco-item');
