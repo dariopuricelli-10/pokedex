@@ -1269,10 +1269,28 @@
           return;
         }
 
+        // L'anno di pubblicazione sta sull'espansione (set), non sulla singola
+        // carta: recuperiamo ogni set unico una sola volta, non una volta a carta
+        // (più stampe della stessa carta condividono spesso lo stesso set).
+        const setIds = [...new Set(dettagli.map(c => c.set && c.set.id).filter(Boolean))];
+        const risultatiSet = await Promise.allSettled(
+          setIds.map(id => fetch(`https://api.tcgdex.net/v2/${lang}/sets/${id}`).then(r => r.ok ? r.json() : null))
+        );
+        if (token !== S.modalRequestId || !grid) return;
+
+        const annoPerSet = {};
+        risultatiSet.forEach((r, i) => {
+          if (r.status === 'fulfilled' && r.value && r.value.releaseDate) {
+            annoPerSet[setIds[i]] = r.value.releaseDate.slice(0, 4);
+          }
+        });
+
         grid.innerHTML = dettagli.map(c => {
           const setNome = (c.set && c.set.name) || '';
+          const anno = c.set && c.set.id ? annoPerSet[c.set.id] : null;
+          const setConAnno = setNome ? `${setNome}${anno ? ' (' + anno + ')' : ''}` : (anno || '');
           const rarita = c.rarity || '';
-          const sottotitolo = [setNome, rarita].filter(Boolean).join(' · ');
+          const sottotitolo = [setConAnno, rarita].filter(Boolean).join(' · ');
           const prezzo = formattaPrezzo(c.pricing);
           // onerror di sicurezza: se anche con l'immagine dichiarata il file non
           // si carica (asset mancante lato TCGdex), rimuove l'intero blocco della
