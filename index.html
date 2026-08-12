@@ -438,6 +438,25 @@
     .carta-set { font-size: 0.72rem; color: var(--blue); text-align: center; }
     .carta-prezzo { font-weight: 800; color: var(--orange); font-size: 0.9rem; margin-top: 2px; }
     .carta-prezzo-assente { color: var(--blue); opacity: 0.7; font-weight: 600; font-size: 0.75rem; margin-top: 2px; }
+
+    .carta-meta { font-size: 0.68rem; color: var(--navy); opacity: 0.75; text-align: center; }
+
+    .carta-varianti { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-top: 2px; }
+    .variante-badge {
+      font-size: 0.66rem;
+      font-weight: 700;
+      color: var(--blue);
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 2px 7px;
+    }
+
+    .carta-prezzo-riga { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+    .tendenza { font-size: 0.72rem; font-weight: 700; }
+    .tendenza-su { color: var(--orange); }
+    .tendenza-giu { color: var(--blue); }
+    .tendenza-stabile { color: var(--navy); opacity: 0.6; }
     .carte-vuoto { font-size: 0.78rem; color: var(--blue); padding: 8px 0; text-align: center; width: 100%; }
 
     .pokemon-img { cursor: pointer; }
@@ -1234,6 +1253,24 @@
       return null;
     }
 
+    // Confronta la media a 7 giorni con quella a 30 giorni (Cardmarket) per
+    // capire se il prezzo sta salendo, scendendo o è stabile nell'ultimo mese.
+    // Soglia del 5% per ignorare piccole oscillazioni non significative.
+    function tendenzaPrezzo(pricing) {
+      const cm = pricing && pricing.cardmarket;
+      if (!cm || typeof cm.avg7 !== 'number' || typeof cm.avg30 !== 'number' || !cm.avg30) return null;
+      const variazione = (cm.avg7 - cm.avg30) / cm.avg30;
+      if (variazione > 0.05) return { testo: '↑ in salita', classe: 'tendenza-su' };
+      if (variazione < -0.05) return { testo: '↓ in calo', classe: 'tendenza-giu' };
+      return { testo: '→ stabile', classe: 'tendenza-stabile' };
+    }
+
+    const VARIANTE_LABELS = { normal: 'Normale', reverse: 'Reverse', holo: 'Holo', firstEdition: 'Prima edizione', wPromo: 'Promo' };
+    function elencoVarianti(v) {
+      if (!v) return [];
+      return Object.entries(v).filter(([k, val]) => val && VARIANTE_LABELS[k]).map(([k]) => VARIANTE_LABELS[k]);
+    }
+
     async function caricaCarteEsistenti(dexId, token, lang) {
       const grid = document.getElementById('carte-grid');
       try {
@@ -1269,29 +1306,43 @@
           return;
         }
 
-        // L'anno di pubblicazione sta sull'espansione (set), non sulla singola
-        // carta: recuperiamo ogni set unico una sola volta, non una volta a carta
-        // (più stampe della stessa carta condividono spesso lo stesso set).
+        // L'anno di pubblicazione e il totale carte stanno sull'espansione
+        // (set), non sulla singola carta: recuperiamo ogni set unico una sola
+        // volta, non una volta a carta (più stampe condividono spesso lo stesso set).
         const setIds = [...new Set(dettagli.map(c => c.set && c.set.id).filter(Boolean))];
         const risultatiSet = await Promise.allSettled(
           setIds.map(id => fetch(`https://api.tcgdex.net/v2/${lang}/sets/${id}`).then(r => r.ok ? r.json() : null))
         );
         if (token !== S.modalRequestId || !grid) return;
 
-        const annoPerSet = {};
+        const infoPerSet = {};
         risultatiSet.forEach((r, i) => {
-          if (r.status === 'fulfilled' && r.value && r.value.releaseDate) {
-            annoPerSet[setIds[i]] = r.value.releaseDate.slice(0, 4);
+          if (r.status === 'fulfilled' && r.value) {
+            infoPerSet[setIds[i]] = {
+              anno: r.value.releaseDate ? r.value.releaseDate.slice(0, 4) : null,
+              totale: r.value.cardCount && r.value.cardCount.official
+            };
           }
         });
 
         grid.innerHTML = dettagli.map(c => {
+          const info = c.set && c.set.id ? infoPerSet[c.set.id] : null;
           const setNome = (c.set && c.set.name) || '';
-          const anno = c.set && c.set.id ? annoPerSet[c.set.id] : null;
-          const setConAnno = setNome ? `${setNome}${anno ? ' (' + anno + ')' : ''}` : (anno || '');
+          const setConAnno = setNome ? `${setNome}${info && info.anno ? ' (' + info.anno + ')' : ''}` : (info && info.anno) || '';
           const rarita = c.rarity || '';
           const sottotitolo = [setConAnno, rarita].filter(Boolean).join(' · ');
+
+          const numeroSerie = (c.localId && info && info.totale) ? `${c.localId}/${info.totale}` : (c.localId || '');
+          const metaParti = [];
+          if (c.illustrator) metaParti.push(`Illustrazione: ${c.illustrator}`);
+          if (numeroSerie) metaParti.push(numeroSerie);
+          const metaLinea = metaParti.join(' · ');
+
+          const varianti = elencoVarianti(c.variants);
+
           const prezzo = formattaPrezzo(c.pricing);
+          const trend = tendenzaPrezzo(c.pricing);
+
           // onerror di sicurezza: se anche con l'immagine dichiarata il file non
           // si carica (asset mancante lato TCGdex), rimuove l'intero blocco della
           // carta invece di lasciare testo orfano senza immagine.
@@ -1300,8 +1351,10 @@
               <img class="carta-thumb" src="${c.image}/high.webp" alt="${esc(c.name)}" loading="lazy" onerror="this.closest('.carta-item').remove()">
               <div class="carta-nome">${esc(c.name)}</div>
               ${sottotitolo ? `<div class="carta-set">${esc(sottotitolo)}</div>` : ''}
+              ${metaLinea ? `<div class="carta-meta">${esc(metaLinea)}</div>` : ''}
+              ${varianti.length ? `<div class="carta-varianti">${varianti.map(v => `<span class="variante-badge">${esc(v)}</span>`).join('')}</div>` : ''}
               ${prezzo
-                ? `<div class="carta-prezzo">${prezzo}</div>`
+                ? `<div class="carta-prezzo-riga"><span class="carta-prezzo">${prezzo}</span>${trend ? `<span class="tendenza ${trend.classe}">${trend.testo}</span>` : ''}</div>`
                 : '<div class="carta-prezzo-assente">Prezzo non disponibile</div>'}
             </div>`;
         }).join('');
