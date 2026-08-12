@@ -118,7 +118,7 @@
     }
 
     /* Le tre viste riempiono lo spazio rimanente sotto l'header */
-    #view-dettaglio, #view-elenco, #view-indovina, #view-account, #view-admin {
+    #view-dettaglio, #view-elenco, #view-indovina, #view-account, #view-admin, #view-stampa {
       flex: 1;
       display: flex;
       flex-direction: column;
@@ -387,6 +387,66 @@
       background: #fff;
     }
 
+    /* Vista Stampa segnaposto (schermo) */
+    .stampa-box {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow-y: auto;
+      padding: 4px 2px;
+    }
+    .stampa-info { font-size: 0.85rem; color: var(--navy); line-height: 1.5; }
+    .stampa-conteggio { font-weight: 800; color: var(--blue); font-size: 0.95rem; }
+
+    /* Il contenuto stampabile resta invisibile finché non si stampa */
+    #stampa-contenuto { display: none; }
+
+    @media print {
+      /* Nella stampa mostriamo SOLO il foglio dei segnaposto, non l'app */
+      body > *:not(#stampa-contenuto) { display: none !important; }
+      html, body {
+        position: static !important;
+        height: auto !important;
+        overflow: visible !important;
+        background: #fff !important;
+      }
+      #stampa-contenuto { display: block !important; }
+
+      @page { size: A4; margin: 8mm; }
+
+      .stampa-pagina { page-break-after: always; }
+      .stampa-pagina:last-child { page-break-after: auto; }
+
+      .stampa-griglia {
+        display: grid;
+        grid-template-columns: repeat(3, 62mm);
+        grid-auto-rows: 86mm;
+        gap: 3mm;
+        justify-content: center;
+      }
+
+      .segnaposto {
+        width: 62mm;
+        height: 86mm;
+        box-sizing: border-box;
+        border: 1px dashed #999;
+        border-radius: 3mm;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1.5mm;
+        padding: 2mm;
+        break-inside: avoid;
+      }
+      .segnaposto img { width: 26mm; height: 26mm; object-fit: contain; }
+      .segnaposto-numero { font-size: 3.2mm; font-weight: 700; color: #333; }
+      .segnaposto-nome { font-size: 3.6mm; font-weight: 800; color: #111; text-transform: capitalize; text-align: center; }
+      .segnaposto-label { font-size: 2.3mm; color: #999; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 1mm; }
+    }
+
     .carte-header {
       display: flex;
       align-items: center;
@@ -583,7 +643,7 @@
     .btn-nav { background: var(--blue); color: #fff; flex-shrink: 0; }
     .nav-buttons .btn-nav { flex: 1; }
     .btn-nav:active { background: var(--blue-deep); }
-    #elenco-back-btn, #acc-back-btn, #admin-back-btn { margin-bottom: 14px; flex-shrink: 0; }
+    #elenco-back-btn, #acc-back-btn, #admin-back-btn, #stampa-back-btn { margin-bottom: 14px; flex-shrink: 0; }
 
     /* Vista Elenco Completo */
     .elenco-search input { width: 100%; }
@@ -756,12 +816,33 @@
       </div>
       <button class="btn-nav" id="admin-back-btn">◀ Torna al Pokédex</button>
     </div>
+
+    <!-- VISTA STAMPA SEGNAPOSTO -->
+    <div id="view-stampa" class="hidden">
+      <div class="stampa-box">
+        <div class="sezione-titolo">Stampa segnaposto</div>
+        <p class="stampa-info">
+          Genera un foglio A4 pronto da stampare con un segnaposto per ogni
+          Pokémon che non hai ancora segnato come "carta posseduta" — da
+          ritagliare e infilare nella tasca vuota dell'album, in attesa di
+          trovare la carta vera. La finestra di stampa del browser permette
+          anche di salvarlo come PDF invece di stamparlo subito.
+        </p>
+        <div class="stampa-conteggio" id="stampa-conteggio"></div>
+        <button class="btn-nav" id="stampa-genera-btn">Genera e stampa</button>
+      </div>
+      <button class="btn-nav" id="stampa-back-btn">◀ Torna al Pokédex</button>
+    </div>
   </div>
+
+  <!-- Contenuto stampabile: invisibile a schermo, mostrato solo da @media print -->
+  <div id="stampa-contenuto"></div>
 
   <!-- Menu di navigazione -->
   <div class="modal-overlay hidden" id="menu-overlay">
     <div class="modal-box menu-box">
       <button class="menu-item" data-target="account">Account</button>
+      <button class="menu-item" data-target="stampa">Stampa segnaposto</button>
       <button class="menu-item menu-item-admin hidden" id="menu-admin-item" data-target="admin">Amministrazione</button>
       <button class="menu-item menu-esci" id="menu-logout-btn">Esci</button>
       <button class="modal-close" id="menu-close-btn">Chiudi</button>
@@ -855,6 +936,11 @@
     const viewLogin = document.getElementById('view-login');
     const viewAccount = document.getElementById('view-account');
     const viewAdmin = document.getElementById('view-admin');
+    const viewStampa = document.getElementById('view-stampa');
+    const stampaConteggio = document.getElementById('stampa-conteggio');
+    const stampaGeneraBtn = document.getElementById('stampa-genera-btn');
+    const stampaBackBtn = document.getElementById('stampa-back-btn');
+    const stampaContenuto = document.getElementById('stampa-contenuto');
 
     const loginUsername = document.getElementById('login-username');
     const loginPassword = document.getElementById('login-password');
@@ -1569,6 +1655,7 @@
       viewIndovina.classList.add('hidden');
       viewAccount.classList.add('hidden');
       viewAdmin.classList.add('hidden');
+      viewStampa.classList.add('hidden');
     }
 
     function evidenziaNav(vista) {
@@ -1637,6 +1724,61 @@
       nascondiTutteLeViste();
       viewDettaglio.classList.remove('hidden');
       evidenziaNav('dettaglio');
+    }
+
+    // Elenco dei Pokémon che NON hai ancora segnato come "carta posseduta"
+    function pokemonMancanti() {
+      return S.tuttiPokemon.filter(p => S.carte.get(p.id) !== true);
+    }
+
+    function apriStampa() {
+      nascondiTutteLeViste();
+      viewStampa.classList.remove('hidden');
+      evidenziaNav(null);
+      const totale = S.tuttiPokemon.length;
+      if (!totale) {
+        stampaConteggio.textContent = 'Caricamento elenco in corso...';
+        return;
+      }
+      const mancanti = pokemonMancanti().length;
+      stampaConteggio.textContent = mancanti
+        ? `Ti mancano ${mancanti} carte su ${totale}.`
+        : 'Le hai già tutte! Nessun segnaposto da stampare.';
+    }
+
+    function chiudiStampa() {
+      nascondiTutteLeViste();
+      viewDettaglio.classList.remove('hidden');
+      evidenziaNav('dettaglio');
+    }
+
+    function generaStampa() {
+      const mancanti = pokemonMancanti();
+      if (!mancanti.length) {
+        flashMessage('Non hai carte mancanti da stampare');
+        return;
+      }
+
+      const PER_PAGINA = 9; // griglia 3x3 per foglio A4
+      let html = '';
+      for (let i = 0; i < mancanti.length; i += PER_PAGINA) {
+        const gruppo = mancanti.slice(i, i + PER_PAGINA);
+        html += '<div class="stampa-pagina"><div class="stampa-griglia">';
+        html += gruppo.map(p => `
+          <div class="segnaposto">
+            <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png"
+                 alt="${esc(p.name)}" onerror="this.style.display='none'">
+            <div class="segnaposto-numero">#${String(p.id).padStart(3, '0')}</div>
+            <div class="segnaposto-nome">${esc(p.name)}</div>
+            <div class="segnaposto-label">Segnaposto</div>
+          </div>`).join('');
+        html += '</div></div>';
+      }
+
+      stampaContenuto.innerHTML = html;
+      // Piccola pausa per dare tempo alle immagini di iniziare a caricare
+      // prima di aprire la finestra di stampa/salvataggio PDF del browser.
+      setTimeout(() => window.print(), 250);
     }
 
     async function caricaPokemonACaso() {
@@ -1853,6 +1995,7 @@
         const target = btn.dataset.target;
         if (target === 'account') apriAccount();
         else if (target === 'admin') apriAdmin();
+        else if (target === 'stampa') apriStampa();
       });
     });
     menuLogoutBtn.addEventListener('click', async () => {
@@ -1868,6 +2011,10 @@
     /* Account */
     accBackBtn.addEventListener('click', chiudiAccount);
     accSalvaBtn.addEventListener('click', cambiaPassword);
+
+    /* Stampa segnaposto */
+    stampaGeneraBtn.addEventListener('click', generaStampa);
+    stampaBackBtn.addEventListener('click', chiudiStampa);
 
     /* Amministrazione */
     adminBackBtn.addEventListener('click', chiudiAdmin);
