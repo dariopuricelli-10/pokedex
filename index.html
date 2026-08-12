@@ -1737,7 +1737,8 @@
     /* ---------------- Autenticazione ---------------- */
 
     function usernameToEmail(u) {
-      return `${u.trim().toLowerCase()}@pokedex.local`;
+      const pulito = u.trim().toLowerCase();
+      return pulito.includes('@') ? pulito : `${pulito}@pokedex.local`;
     }
 
     function passwordValida(pw) {
