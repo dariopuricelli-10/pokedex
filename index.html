@@ -411,16 +411,33 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
       margin-top: 10px;
+    }
+    .carta-item {
+      width: 100%;
+      max-width: 280px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      padding: 10px;
+      background: var(--panel);
+      border: 2px solid var(--border);
+      border-radius: 14px;
     }
     .carta-thumb {
       width: 100%;
-      max-width: 220px;
+      max-width: 260px;
       height: auto;
       border-radius: 10px;
       border: 1px solid var(--border);
+      margin-bottom: 4px;
     }
+    .carta-nome { font-weight: 800; color: var(--navy); font-size: 0.92rem; text-align: center; text-transform: capitalize; }
+    .carta-set { font-size: 0.72rem; color: var(--blue); text-align: center; }
+    .carta-prezzo { font-weight: 800; color: var(--orange); font-size: 0.9rem; margin-top: 2px; }
+    .carta-prezzo-assente { color: var(--blue); opacity: 0.7; font-weight: 600; font-size: 0.75rem; margin-top: 2px; }
     .carte-vuoto { font-size: 0.78rem; color: var(--blue); padding: 8px 0; text-align: center; width: 100%; }
 
     .pokemon-img { cursor: pointer; }
@@ -1199,6 +1216,24 @@
       S.modalRequestId++; // invalida eventuali richieste di carte ancora in corso
     }
 
+    // Estrae un prezzo indicativo dai dati TCGdex: preferisce Cardmarket (EUR,
+    // più rilevante per l'Italia), altrimenti usa TCGplayer (USD) come riserva.
+    function formattaPrezzo(pricing) {
+      if (!pricing) return null;
+      const cm = pricing.cardmarket;
+      if (cm) {
+        const valore = cm.trend ?? cm.avg ?? cm.avg7 ?? cm.avg30 ?? cm['trend-holo'] ?? cm['avg-holo'];
+        if (typeof valore === 'number') return `≈ ${valore.toFixed(2).replace('.', ',')} €`;
+      }
+      const tp = pricing.tcgplayer;
+      if (tp) {
+        const variante = tp.normal || tp.holofoil || tp.reverseHolofoil || tp.holo || tp.reverse ||
+          Object.values(tp).find(v => v && typeof v === 'object' && typeof v.marketPrice === 'number');
+        if (variante && typeof variante.marketPrice === 'number') return `≈ $${variante.marketPrice.toFixed(2)}`;
+      }
+      return null;
+    }
+
     async function caricaCarteEsistenti(dexId, token, lang) {
       const grid = document.getElementById('carte-grid');
       try {
@@ -1216,12 +1251,41 @@
           return;
         }
 
-        grid.innerHTML = conImmagine.map(c => {
+        grid.innerHTML = '<div class="carte-vuoto">Caricamento prezzi e dettagli...</div>';
+
+        // L'elenco dà solo id/nome/immagine: prezzo, set e rarità servono la
+        // scheda completa di ogni singola carta, quindi le carichiamo in parallelo.
+        const risultati = await Promise.allSettled(
+          conImmagine.map(c => fetch(`https://api.tcgdex.net/v2/${lang}/cards/${c.id}`).then(r => r.ok ? r.json() : null))
+        );
+        if (token !== S.modalRequestId || !grid) return;
+
+        const dettagli = risultati
+          .map(r => (r.status === 'fulfilled' ? r.value : null))
+          .filter(c => c && c.image);
+
+        if (!dettagli.length) {
+          grid.innerHTML = '<div class="carte-vuoto">Nessuna carta disponibile in questa lingua per questo Pokémon</div>';
+          return;
+        }
+
+        grid.innerHTML = dettagli.map(c => {
           const setNome = (c.set && c.set.name) || '';
-          const titolo = `${c.name}${setNome ? ' — ' + setNome : ''}`;
+          const rarita = c.rarity || '';
+          const sottotitolo = [setNome, rarita].filter(Boolean).join(' · ');
+          const prezzo = formattaPrezzo(c.pricing);
           // onerror di sicurezza: se anche con l'immagine dichiarata il file non
-          // si carica (asset mancante lato TCGdex), la rimuove invece di lasciare un'icona rotta.
-          return `<img class="carta-thumb" src="${c.image}/low.webp" alt="${esc(c.name)}" title="${esc(titolo)}" loading="lazy" onerror="this.remove()">`;
+          // si carica (asset mancante lato TCGdex), rimuove l'intero blocco della
+          // carta invece di lasciare testo orfano senza immagine.
+          return `
+            <div class="carta-item">
+              <img class="carta-thumb" src="${c.image}/high.webp" alt="${esc(c.name)}" loading="lazy" onerror="this.closest('.carta-item').remove()">
+              <div class="carta-nome">${esc(c.name)}</div>
+              ${sottotitolo ? `<div class="carta-set">${esc(sottotitolo)}</div>` : ''}
+              ${prezzo
+                ? `<div class="carta-prezzo">${prezzo}</div>`
+                : '<div class="carta-prezzo-assente">Prezzo non disponibile</div>'}
+            </div>`;
         }).join('');
       } catch (e) {
         if (token !== S.modalRequestId || !grid) return;
