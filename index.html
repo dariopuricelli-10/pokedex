@@ -470,6 +470,9 @@
       .segnaposto-numero { font-size: 3.2mm; font-weight: 700; color: #333; }
       .segnaposto-nome { font-size: 3.6mm; font-weight: 800; color: #111; text-transform: capitalize; text-align: center; }
       .segnaposto-label { font-size: 2.3mm; color: #999; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 1mm; }
+      .segnaposto-img-carta { width: 46mm; height: auto; object-fit: contain; margin-bottom: 0.5mm; }
+      .segnaposto-set { font-size: 2.6mm; color: #555; text-align: center; }
+      .segnaposto-prezzo { font-size: 3.6mm; font-weight: 800; color: #b5570a; margin-top: 0.5mm; }
     }
 
     .carte-header {
@@ -881,6 +884,7 @@
     <div id="view-desiderate" class="hidden">
       <div class="sezione-titolo">Lista desideri</div>
       <p class="stampa-info">Tocca una carta nella scheda di un Pokémon per aggiungerla o toglierla da qui.</p>
+      <button class="btn-nav" id="desiderate-stampa-btn">Stampa lista desideri</button>
       <div class="top-carte-scroll" id="desiderate-scroll">
         <div class="carte-grid interattiva" id="desiderate-lista"></div>
       </div>
@@ -1008,6 +1012,7 @@
 
     const viewDesiderate = document.getElementById('view-desiderate');
     const desiderateLista = document.getElementById('desiderate-lista');
+    const desiderateStampaBtn = document.getElementById('desiderate-stampa-btn');
     const desiderateBackBtn = document.getElementById('desiderate-back-btn');
 
     const loginUsername = document.getElementById('login-username');
@@ -1645,6 +1650,58 @@
       }
     }
 
+    async function generaStampaDesiderate() {
+      if (!S.utente) return;
+      let righe;
+      try {
+        righe = await db('GET', `pokedex_desiderate?select=card_id,dati&utente_id=eq.${S.utente.id}&order=aggiunta_il.desc`);
+      } catch (e) {
+        flashMessage('Impossibile caricare la lista desideri', 3500);
+        return;
+      }
+      if (!righe.length) {
+        flashMessage('La lista desideri è vuota');
+        return;
+      }
+
+      desiderateStampaBtn.disabled = true;
+      const testoOriginale = desiderateStampaBtn.textContent;
+      desiderateStampaBtn.textContent = `Preparazione immagini... (0/${righe.length})`;
+
+      // Le immagini delle carte vengono da TCGdex (assets.tcgdex.net), un
+      // CDN dedicato: già affidabile, ma precarichiamo comunque per essere
+      // certi che siano pronte prima di aprire la stampa.
+      const urls = righe.map(r => `${r.dati.immagine}/high.webp`);
+      const esiti = await precaricaImmagini(urls, (fatte, totali) => {
+        desiderateStampaBtn.textContent = `Preparazione immagini... (${fatte}/${totali})`;
+      });
+
+      const PER_PAGINA = 9;
+      let html = '';
+      for (let i = 0; i < righe.length; i += PER_PAGINA) {
+        const gruppo = righe.slice(i, i + PER_PAGINA);
+        const gruppoEsiti = esiti.slice(i, i + PER_PAGINA);
+        html += '<div class="stampa-pagina"><div class="stampa-griglia">';
+        html += gruppo.map((r, idx) => {
+          const d = r.dati;
+          return `
+            <div class="segnaposto">
+              ${gruppoEsiti[idx] ? `<img class="segnaposto-img-carta" src="${d.immagine}/high.webp" alt="${esc(d.nome)}">` : ''}
+              <div class="segnaposto-nome">${esc(d.nome)}</div>
+              ${d.sottotitolo ? `<div class="segnaposto-set">${esc(d.sottotitolo)}</div>` : ''}
+              <div class="segnaposto-prezzo">${d.prezzoTesto || 'Prezzo non disponibile'}</div>
+              <div class="segnaposto-label">Lista desideri</div>
+            </div>`;
+        }).join('');
+        html += '</div></div>';
+      }
+
+      stampaContenuto.innerHTML = html;
+      desiderateStampaBtn.disabled = false;
+      desiderateStampaBtn.textContent = testoOriginale;
+      window.print();
+    }
+
     async function cambiaPassword() {
       const nuova = accPassword1.value;
       const conferma = accPassword2.value;
@@ -1939,22 +1996,56 @@
       }
     }
 
-    function generaStampa() {
+    // jsDelivr è un vero CDN che rispecchia il repository GitHub degli sprite:
+    // molto più affidabile di raw.githubusercontent.com quando si caricano
+    // centinaia di immagini in parallelo (che non è pensato per quel traffico).
+    function spriteStampa(id) {
+      return `https://cdn.jsdelivr.net/gh/PokeAPI/sprites@master/sprites/pokemon/${id}.png`;
+    }
+
+    // Precarica una lista di URL immagine e aspetta che ognuna sia pronta
+    // (caricata o fallita) prima di proseguire, invece di sperare che una
+    // pausa fissa sia sufficiente. Ritorna quali sono effettivamente riuscite.
+    function precaricaImmagini(urls, alProgresso) {
+      let caricate = 0;
+      return Promise.all(urls.map(url => new Promise(resolve => {
+        const img = new Image();
+        const fine = (ok) => {
+          caricate++;
+          if (alProgresso) alProgresso(caricate, urls.length);
+          resolve(ok);
+        };
+        img.onload = () => fine(true);
+        img.onerror = () => fine(false);
+        img.src = url;
+      })));
+    }
+
+    async function generaStampa() {
       const mancanti = pokemonMancanti();
       if (!mancanti.length) {
         flashMessage('Non hai carte mancanti da stampare');
         return;
       }
 
+      stampaGeneraBtn.disabled = true;
+      const testoOriginale = stampaGeneraBtn.textContent;
+      stampaGeneraBtn.textContent = `Preparazione immagini... (0/${mancanti.length})`;
+
+      const urls = mancanti.map(p => spriteStampa(p.id));
+      const esiti = await precaricaImmagini(urls, (fatte, totali) => {
+        stampaGeneraBtn.textContent = `Preparazione immagini... (${fatte}/${totali})`;
+      });
+
       const PER_PAGINA = 9; // griglia 3x3 per foglio A4
       let html = '';
       for (let i = 0; i < mancanti.length; i += PER_PAGINA) {
         const gruppo = mancanti.slice(i, i + PER_PAGINA);
+        const gruppoEsiti = esiti.slice(i, i + PER_PAGINA);
         html += '<div class="stampa-pagina"><div class="stampa-griglia">';
-        html += gruppo.map(p => `
+        html += gruppo.map((p, idx) => `
           <div class="segnaposto">
-            <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png"
-                 alt="${esc(p.name)}" onerror="this.style.display='none'">
+            ${gruppoEsiti[idx] ? `<img src="${spriteStampa(p.id)}" alt="${esc(p.name)}">` : ''}
             <div class="segnaposto-numero">#${String(p.id).padStart(3, '0')}</div>
             <div class="segnaposto-nome">${esc(p.name)}</div>
             <div class="segnaposto-label">Segnaposto</div>
@@ -1963,9 +2054,9 @@
       }
 
       stampaContenuto.innerHTML = html;
-      // Piccola pausa per dare tempo alle immagini di iniziare a caricare
-      // prima di aprire la finestra di stampa/salvataggio PDF del browser.
-      setTimeout(() => window.print(), 250);
+      stampaGeneraBtn.disabled = false;
+      stampaGeneraBtn.textContent = testoOriginale;
+      window.print();
     }
 
     async function aggiornaTopCarte() {
@@ -2321,6 +2412,7 @@
     /* Carte più costose */
     topCarteRefreshBtn.addEventListener('click', aggiornaTopCarte);
     topCarteBackBtn.addEventListener('click', chiudiTopCarte);
+    desiderateStampaBtn.addEventListener('click', generaStampaDesiderate);
     desiderateBackBtn.addEventListener('click', chiudiDesiderate);
 
     /* Amministrazione */
