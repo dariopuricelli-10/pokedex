@@ -518,6 +518,8 @@
     .carte-grid.interattiva .carta-item { cursor: pointer; }
     .carte-grid.interattiva .carta-item:active { opacity: 0.9; }
     .carta-item.desiderata { background: var(--verde-chiaro); border-color: var(--verde); }
+    .carte-grid-grande .carta-item { max-width: 420px; }
+    .carte-grid-grande .carta-thumb { max-width: 390px; }
     .carta-thumb {
       width: 100%;
       max-width: 260px;
@@ -885,8 +887,11 @@
       <div class="sezione-titolo">Lista desideri</div>
       <p class="stampa-info">Tocca una carta nella scheda di un Pokémon per aggiungerla o toglierla da qui.</p>
       <button class="btn-nav" id="desiderate-stampa-btn">Stampa lista desideri</button>
+      <div class="elenco-search">
+        <input type="text" id="desiderate-search" placeholder="Cerca per nome Pokémon..." autocomplete="off">
+      </div>
       <div class="top-carte-scroll" id="desiderate-scroll">
-        <div class="carte-grid interattiva" id="desiderate-lista"></div>
+        <div class="carte-grid interattiva carte-grid-grande" id="desiderate-lista"></div>
       </div>
       <button class="btn-nav" id="desiderate-back-btn">◀ Torna al Pokédex</button>
     </div>
@@ -969,6 +974,7 @@
       carteLang: 'it',            // lingua/nazione delle carte mostrate nella modale
       filtroGenerazione: null,    // { nome, da, a } se un'etichetta di generazione è selezionata
       desiderate: new Set(),      // id carta TCGdex presenti nella lista desideri dell'utente
+      desiderateRighe: [],        // righe complete già caricate, per filtrare senza rifare la query
       mappaCarteVisualizzate: {}, // id carta -> dati, per la modale attualmente aperta
       currentAudioUrl: '',
       requestId: 0                // token per scartare risposte fuori ordine
@@ -1013,6 +1019,7 @@
     const viewDesiderate = document.getElementById('view-desiderate');
     const desiderateLista = document.getElementById('desiderate-lista');
     const desiderateStampaBtn = document.getElementById('desiderate-stampa-btn');
+    const desiderateSearch = document.getElementById('desiderate-search');
     const desiderateBackBtn = document.getElementById('desiderate-back-btn');
 
     const loginUsername = document.getElementById('login-username');
@@ -1638,16 +1645,28 @@
 
     async function caricaListaDesiderate() {
       desiderateLista.innerHTML = '<div class="carte-vuoto">Caricamento...</div>';
+      desiderateSearch.value = '';
       try {
         const righe = await db('GET', `pokedex_desiderate?select=card_id,dati&utente_id=eq.${S.utente.id}&order=aggiunta_il.desc`);
-        if (!righe.length) {
-          desiderateLista.innerHTML = '<div class="carte-vuoto">Nessuna carta desiderata ancora. Toccane una nella scheda di un Pokémon per aggiungerla.</div>';
-          return;
-        }
-        desiderateLista.innerHTML = righe.map(r => bloccoCartaHTML({ ...r.dati, id: r.card_id })).join('');
+        S.desiderateRighe = righe;
+        renderDesiderateFiltrate('');
       } catch (e) {
+        S.desiderateRighe = [];
         desiderateLista.innerHTML = '<div class="carte-vuoto">Impossibile caricare la lista</div>';
       }
+    }
+
+    function renderDesiderateFiltrate(filtro) {
+      const righe = S.desiderateRighe;
+      if (!righe.length) {
+        desiderateLista.innerHTML = '<div class="carte-vuoto">Nessuna carta desiderata ancora. Toccane una nella scheda di un Pokémon per aggiungerla.</div>';
+        return;
+      }
+      const q = filtro.trim().toLowerCase();
+      const filtrate = q ? righe.filter(r => (r.dati.nome || '').toLowerCase().includes(q)) : righe;
+      desiderateLista.innerHTML = filtrate.length
+        ? filtrate.map(r => bloccoCartaHTML({ ...r.dati, id: r.card_id })).join('')
+        : '<div class="carte-vuoto">Nessuna carta desiderata corrisponde alla ricerca</div>';
     }
 
     async function generaStampaDesiderate() {
@@ -1699,7 +1718,13 @@
       stampaContenuto.innerHTML = html;
       desiderateStampaBtn.disabled = false;
       desiderateStampaBtn.textContent = testoOriginale;
+
+      // I browser usano document.title come nome file suggerito quando si
+      // sceglie "Salva come PDF" dalla finestra di stampa.
+      const titoloOriginale = document.title;
+      document.title = 'Cefalonia 6 Lista';
       window.print();
+      document.title = titoloOriginale;
     }
 
     async function cambiaPassword() {
@@ -2356,10 +2381,13 @@
       if (!item || !item.dataset.id) return;
       toggleDesiderata(item.dataset.id, null);
       item.remove();
+      S.desiderateRighe = S.desiderateRighe.filter(r => r.card_id !== item.dataset.id);
       if (!desiderateLista.querySelector('.carta-item')) {
         desiderateLista.innerHTML = '<div class="carte-vuoto">Nessuna carta desiderata ancora. Toccane una nella scheda di un Pokémon per aggiungerla.</div>';
       }
     });
+
+    desiderateSearch.addEventListener('input', () => renderDesiderateFiltrate(desiderateSearch.value));
 
     elencoBackBtn.addEventListener('click', chiudiElenco);
     indovinaBackBtn.addEventListener('click', chiudiIndovina);
