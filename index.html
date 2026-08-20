@@ -470,7 +470,9 @@
       .segnaposto-numero { font-size: 3.2mm; font-weight: 700; color: #333; }
       .segnaposto-nome { font-size: 3.6mm; font-weight: 800; color: #111; text-transform: capitalize; text-align: center; }
       .segnaposto-label { font-size: 2.3mm; color: #999; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 1mm; }
-      .segnaposto-img-carta { width: 46mm; height: auto; object-fit: contain; margin-bottom: 0.5mm; }
+      .segnaposto-img-carta { width: 69mm; height: auto; object-fit: contain; margin-bottom: 0.5mm; }
+      .segnaposto-carta-grande { width: 78mm; height: 130mm; }
+      .stampa-griglia.griglia-desideri { grid-template-columns: repeat(2, 78mm); grid-auto-rows: 130mm; }
       .segnaposto-set { font-size: 2.6mm; color: #555; text-align: center; }
       .segnaposto-prezzo { font-size: 3.6mm; font-weight: 800; color: #b5570a; margin-top: 0.5mm; }
     }
@@ -518,8 +520,6 @@
     .carte-grid.interattiva .carta-item { cursor: pointer; }
     .carte-grid.interattiva .carta-item:active { opacity: 0.9; }
     .carta-item.desiderata { background: var(--verde-chiaro); border-color: var(--verde); }
-    .carte-grid-grande .carta-item { max-width: 420px; }
-    .carte-grid-grande .carta-thumb { max-width: 390px; }
     .carta-thumb {
       width: 100%;
       max-width: 260px;
@@ -891,7 +891,7 @@
         <input type="text" id="desiderate-search" placeholder="Cerca per nome Pokémon..." autocomplete="off">
       </div>
       <div class="top-carte-scroll" id="desiderate-scroll">
-        <div class="carte-grid interattiva carte-grid-grande" id="desiderate-lista"></div>
+        <div class="carte-grid interattiva" id="desiderate-lista"></div>
       </div>
       <button class="btn-nav" id="desiderate-back-btn">◀ Torna al Pokédex</button>
     </div>
@@ -1695,16 +1695,16 @@
         desiderateStampaBtn.textContent = `Preparazione immagini... (${fatte}/${totali})`;
       });
 
-      const PER_PAGINA = 9;
+      const PER_PAGINA = 4; // griglia 2x2: con immagini più grandi, 9 per foglio non ci stanno più
       let html = '';
       for (let i = 0; i < righe.length; i += PER_PAGINA) {
         const gruppo = righe.slice(i, i + PER_PAGINA);
         const gruppoEsiti = esiti.slice(i, i + PER_PAGINA);
-        html += '<div class="stampa-pagina"><div class="stampa-griglia">';
+        html += '<div class="stampa-pagina"><div class="stampa-griglia griglia-desideri">';
         html += gruppo.map((r, idx) => {
           const d = r.dati;
           return `
-            <div class="segnaposto">
+            <div class="segnaposto segnaposto-carta-grande">
               ${gruppoEsiti[idx] ? `<img class="segnaposto-img-carta" src="${d.immagine}/high.webp" alt="${esc(d.nome)}">` : ''}
               <div class="segnaposto-nome">${esc(d.nome)}</div>
               ${d.sottotitolo ? `<div class="segnaposto-set">${esc(d.sottotitolo)}</div>` : ''}
